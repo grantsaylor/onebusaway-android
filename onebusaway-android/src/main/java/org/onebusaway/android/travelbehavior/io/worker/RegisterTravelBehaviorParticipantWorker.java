@@ -15,6 +15,15 @@
  */
 package org.onebusaway.android.travelbehavior.io.worker;
 
+import android.content.Context;
+import android.net.Uri;
+import android.util.Log;
+
+import androidx.annotation.NonNull;
+import androidx.concurrent.futures.CallbackToFutureAdapter;
+import androidx.work.ListenableWorker;
+import androidx.work.WorkerParameters;
+
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.firebase.auth.FirebaseAuth;
 
@@ -28,23 +37,12 @@ import org.onebusaway.android.travelbehavior.constants.TravelBehaviorConstants;
 import org.onebusaway.android.travelbehavior.io.TravelBehaviorFileSaverExecutorManager;
 import org.onebusaway.android.travelbehavior.utils.TravelBehaviorFirebaseIOUtils;
 
-import android.content.Context;
-import android.net.Uri;
-import android.util.Log;
-
 import java.io.IOException;
 import java.io.Reader;
-
-import androidx.annotation.NonNull;
-import androidx.concurrent.futures.ResolvableFuture;
-import androidx.work.ListenableWorker;
-import androidx.work.WorkerParameters;
 
 public class RegisterTravelBehaviorParticipantWorker extends ListenableWorker {
 
     private static final String TAG = "RegisterTravelUser";
-
-    private ResolvableFuture<Result> mFuture;
 
     public RegisterTravelBehaviorParticipantWorker(@NonNull Context context,
                                                    @NonNull WorkerParameters workerParams) {
@@ -54,12 +52,28 @@ public class RegisterTravelBehaviorParticipantWorker extends ListenableWorker {
     @NonNull
     @Override
     public ListenableFuture<Result> startWork() {
-        mFuture = ResolvableFuture.create();
-        registerUser();
-        return mFuture;
+        return CallbackToFutureAdapter.getFuture(completer -> {
+//            Callback callback = new Callback() {
+//                @Override
+//                public void onResponse(Call call, Response response) {
+//                    // No-op - result was set within method
+//                }
+//
+//                @Override
+//                public void onFailure(Call call, Throwable t) {
+//                    completer.setException(t);
+//                }
+//            };
+//
+//            registerUser(completer);
+//            return callback;
+
+            registerUser(completer);
+            return "Tried to register participant";
+        });
     }
 
-    private void registerUser() {
+    private void registerUser(CallbackToFutureAdapter.Completer completer) {
         FirebaseAuth auth = FirebaseAuth.getInstance();
         Log.d(TAG, "Initializing anonymous Firebase user");
         TravelBehaviorFileSaverExecutorManager manager =
@@ -68,17 +82,17 @@ public class RegisterTravelBehaviorParticipantWorker extends ListenableWorker {
                 .addOnCompleteListener(manager.getThreadPoolExecutor(), task -> {
                     if (task.isSuccessful()) {
                         Log.d(TAG, "Firebase user init success ID: " + auth.getUid());
-                        saveEmailAddress(auth.getUid());
+                        saveEmailAddress(completer, auth.getUid());
                         TravelBehaviorFirebaseIOUtils.initFirebaseUserWithId(auth.getUid());
                     } else {
                         TravelBehaviorFirebaseIOUtils.logErrorMessage(task.getException(),
                                 "Firebase user init failed: ");
-                        mFuture.set(Result.failure());
+                        completer.set(Result.failure());
                     }
                 });
     }
 
-    private void saveEmailAddress(String uid) {
+    private void saveEmailAddress(CallbackToFutureAdapter.Completer completer, String uid) {
         String email = getInputData().getString(TravelBehaviorConstants.USER_EMAIL);
         Uri uri = buildUri(uid, email);
         try {
@@ -88,13 +102,14 @@ public class RegisterTravelBehaviorParticipantWorker extends ListenableWorker {
             if (TravelBehaviorConstants.PARTICIPANT_SERVICE_RESULT.equals(result)) {
                 TravelBehaviorManager.optInUser(uid);
                 TravelBehaviorManager.startCollectingData(getApplicationContext());
-                mFuture.set(Result.success());
+                completer.set(Result.success());
             } else {
-                mFuture.set(Result.failure());
+                completer.set(Result.failure());
             }
         } catch (IOException e) {
             Log.e(TAG, e.toString());
-            mFuture.set(Result.failure());
+            // FIXME - when we reach here, onSuccess() is still called
+            completer.set(Result.failure());
         }
     }
 
