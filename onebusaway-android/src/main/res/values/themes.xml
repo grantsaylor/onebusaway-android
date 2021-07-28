@@ -14,7 +14,7 @@
     limitations under the License.
 -->
 <resources>
-    <style name="Theme.OneBusAway" parent="Theme.AppCompat.Light.DarkActionBar">
+    <style name="Theme.OneBusAway" parent="Theme.MaterialComponents.DayNight">
         <!--   App branding color for the app bar -->
         <item name="colorPrimary">@color/theme_primary</item>
         <!--   Darker variant for the status bar and contextual app bars -->
